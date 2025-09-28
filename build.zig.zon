@@ -1,0 +1,13 @@
+.{
+    .name = .odb_zig,
+    .version = "0.0.0",
+    .fingerprint = 0x3de45c74a2c1c8eb, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.15.1",
+    .dependencies = .{
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
