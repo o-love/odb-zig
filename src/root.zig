@@ -1,7 +1,7 @@
 //! By convention, root.zig is the root source file when making a library.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const Process = @import("process.zig").Process;
+const Process = @import("Process.zig");
 const Cli = @import("cli.zig").Cli;
 const OdbError = @import("errors.zig").OdbError;
 
@@ -57,5 +57,5 @@ pub fn RunDebugger(gpa: Allocator, opts: Options) !void {
 test "odb-zig" {
     _ = @import("cli.zig");
     _ = @import("cmd.zig");
-    _ = @import("process.zig");
+    _ = @import("Process.zig");
 }

@@ -1,7 +1,7 @@
 const std = @import("std");
 const cmdUtils = @import("cmd.zig");
 const Allocator = std.mem.Allocator;
-const Process = @import("process.zig").Process;
+const Process = @import("Process.zig");
 
 
 pub const Cli = struct {
