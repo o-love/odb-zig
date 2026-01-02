@@ -21,7 +21,6 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-
     b.installArtifact(cli);
     const run_step = b.step("run", "Run the app");
     const run_cmd = b.addRunArtifact(cli);

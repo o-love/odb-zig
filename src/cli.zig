@@ -5,7 +5,6 @@ const Allocator = std.mem.Allocator;
 const Process = odb_zig.Process;
 const Cmd = odb_zig.Cmd;
 
-
 pub const Cli = struct {
     const Self = @This();
 
@@ -80,7 +79,6 @@ fn read_line(line_buffer: []u8, input: *std.Io.Reader) ![]u8 {
     return line_buffer[0..line_length];
 }
 
-
 fn build_cmd(cmd: []const u8) !Cmd {
     var cmdIter = std.mem.splitAny(u8, cmd, " ");
 
@@ -88,8 +86,6 @@ fn build_cmd(cmd: []const u8) !Cmd {
     const baseCmd = Cmd.parse(baseCmdStr, cmdIter.rest()).?;
     return baseCmd;
 }
-
-
 
 test "read line" {
     const test_input = "test input\ntest\n";

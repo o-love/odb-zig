@@ -9,7 +9,6 @@ const Config = struct {
     pid: ?u32 = null,
     command: std.ArrayList([]const u8) = .{},
 
-
     fn deinit(config: *Config) !void {
         for (config.command.items) |c| {
             config.allocator.free(c);
@@ -50,7 +49,7 @@ fn parse_args(allocator: Allocator, io: std.Io) !Config {
         if (std.mem.eql(u8, args[i], "--pid")) {
             i += 1;
             config.pid = std.fmt.parseInt(u32, args[i], 10) catch {
-                std.log.err("Unable to parse --pid as int: '{s}'", .{ args[i] });
+                std.log.err("Unable to parse --pid as int: '{s}'", .{args[i]});
                 return error.InvalidArgs;
             };
         } else {
@@ -63,7 +62,6 @@ fn parse_args(allocator: Allocator, io: std.Io) !Config {
 }
 
 fn run_debugger(config: Config) !void {
-
     var input_buffer: [1024]u8 = undefined;
     var output_buffer: [1024]u8 = undefined;
 

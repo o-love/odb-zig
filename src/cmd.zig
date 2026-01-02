@@ -53,16 +53,15 @@ pub const Cmd = union(enum) {
             inline else => |case| return case.run(params),
         }
     }
-
 };
 
 const Ping = struct {
     const Self = @This();
 
     pub fn build(
-        _: [] const u8,
+        _: []const u8,
     ) Cmd {
-        return Cmd{.ping = Self{}};
+        return Cmd{ .ping = Self{} };
     }
 
     pub fn run(
@@ -71,7 +70,7 @@ const Ping = struct {
     ) !i32 {
         const pid = if (params.process) |p| p.pid else -1;
 
-        try params.output.print("pong {d}\n", .{ pid });
+        try params.output.print("pong {d}\n", .{pid});
         return 0;
     }
 };
@@ -80,9 +79,9 @@ const Cont = struct {
     const Self = @This();
 
     pub fn build(
-        _: [] const u8,
+        _: []const u8,
     ) Cmd {
-        return Cmd{ .cont = Self{}};
+        return Cmd{ .cont = Self{} };
     }
 
     pub fn run(
@@ -107,9 +106,9 @@ const Breakpoint = struct {
     const Self = @This();
 
     pub fn build(
-        _: [] const u8,
+        _: []const u8,
     ) Cmd {
-        return Cmd{ .breakpoint = Self{}};
+        return Cmd{ .breakpoint = Self{} };
     }
 
     pub fn run(
@@ -125,11 +124,10 @@ const Exit = struct {
     const Self = @This();
 
     pub fn build(
-        _: [] const u8,
+        _: []const u8,
     ) Cmd {
-        return Cmd{ .exit = Self{}};
+        return Cmd{ .exit = Self{} };
     }
-
 
     pub fn run(
         _: Self,

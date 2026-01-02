@@ -25,10 +25,7 @@ const Private = struct {
 pid: i32,
 private: Private,
 
-pub fn launch(
-    gpa: Allocator,
-    cmd: []const []const u8
-) !@This() {
+pub fn launch(gpa: Allocator, cmd: []const []const u8) !@This() {
     const fork = system.fork;
     const execv = std.process.execv;
 
@@ -96,10 +93,7 @@ pub fn wait_on_signal(self: *const @This()) u32 {
     const waitpid = system.waitpid;
 
     const wait_result = waitpid(self.pid, 0);
-    std.log.debug("waitpid for {d} returned {d}\n", .{
-        wait_result.pid,
-        wait_result.status
-    });
+    std.log.debug("waitpid for {d} returned {d}\n", .{ wait_result.pid, wait_result.status });
 
     return wait_result.status;
 }
@@ -138,10 +132,9 @@ pub fn kill(self: *const @This(), signal: std.posix.SIG) !void {
     return std.posix.kill(self.pid, signal);
 }
 
-
 test "wait_on_signal waits until process finishes" {
     const allocator = std.testing.allocator;
-    const cmd = [_][]const u8{"/usr/bin/env", "bash", "-c" , "sleep 1"};
+    const cmd = [_][]const u8{ "/usr/bin/env", "bash", "-c", "sleep 1" };
 
     const p = try Process.launch(allocator, &cmd);
     try p.resume_p();
@@ -156,11 +149,10 @@ test "wait_on_signal waits until process finishes" {
         @panic("expected error: process not found");
     } else |err| {
         switch (err) {
-            ProcessNotFound => {
-            },
+            ProcessNotFound => {},
             else => {
                 return err;
-            }
+            },
         }
     }
 }
