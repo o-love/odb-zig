@@ -1,10 +1,12 @@
 const std = @import("std");
+const odg_zig = @import("root.zig");
+
 const Allocator = std.mem.Allocator;
 const system = std.posix;
 const PTRACE = std.os.linux.PTRACE;
 const ptrace = system.ptrace;
 const panic = std.debug.panic;
-const OdbError = @import("errors.zig").OdbError;
+const OdbError = odg_zig.OdbError;
 
 const Process = @This();
 

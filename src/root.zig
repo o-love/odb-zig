@@ -1,9 +1,12 @@
 //! By convention, root.zig is the root source file when making a library.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const Process = @import("Process.zig");
-const Cli = @import("cli.zig").Cli;
-const OdbError = @import("errors.zig").OdbError;
+
+pub const Process = @import("Process.zig");
+pub const Cli = @import("cli.zig").Cli;
+pub const OdbError = @import("errors.zig").OdbError;
+pub const Cmd = @import("cmd.zig").Cmd;
+
 
 pub const Options = struct {
     pid: u32 = 0,

@@ -1,13 +1,15 @@
 const std = @import("std");
-const cmdUtils = @import("cmd.zig");
+const odb_zig = @import("root.zig");
 const Allocator = std.mem.Allocator;
-const Process = @import("Process.zig");
+
+const Process = odb_zig.Process;
+const Cmd = odb_zig.Cmd;
 
 
 pub const Cli = struct {
     const Self = @This();
 
-    const HistoryList = std.ArrayList(cmdUtils.Cmd);
+    const HistoryList = std.ArrayList(Cmd);
     history: HistoryList,
 
     gpa: Allocator,
@@ -38,7 +40,7 @@ pub const Cli = struct {
 
     pub fn ask_cmd(
         self: *Cli,
-    ) !cmdUtils.Cmd {
+    ) !Cmd {
         var line_buffer: [1024]u8 = undefined;
 
         _ = try self.output.write("odb> ");
@@ -55,10 +57,10 @@ pub const Cli = struct {
 
     pub fn handle_cmd(
         self: *const Cli,
-        cmd: cmdUtils.Cmd,
+        cmd: Cmd,
         process: ?*Process,
     ) !i32 {
-        return try cmd.run(cmdUtils.Cmd.RunParams{
+        return try cmd.run(Cmd.RunParams{
             .process = process,
 
             .input = self.input,
@@ -79,11 +81,11 @@ fn read_line(line_buffer: []u8, input: *std.Io.Reader) ![]u8 {
 }
 
 
-fn build_cmd(cmd: []const u8) !cmdUtils.Cmd {
+fn build_cmd(cmd: []const u8) !Cmd {
     var cmdIter = std.mem.splitAny(u8, cmd, " ");
 
     const baseCmdStr = cmdIter.next().?;
-    const baseCmd = cmdUtils.Cmd.parse(baseCmdStr, cmdIter.rest()).?;
+    const baseCmd = Cmd.parse(baseCmdStr, cmdIter.rest()).?;
     return baseCmd;
 }
 

@@ -1,6 +1,8 @@
 const std = @import("std");
-const OdbError = @import("errors.zig").OdbError;
-const Process = @import("Process.zig");
+const odb_zig = @import("root.zig");
+
+const OdbError = odb_zig.OdbError;
+const Process = odb_zig.Process;
 
 pub const Cmd = union(enum) {
     ping: Ping,
