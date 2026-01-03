@@ -156,3 +156,7 @@ test "wait_on_signal waits until process finishes" {
         }
     }
 }
+
+test "continue terminated process" {}
+
+test "wait on terminated process" {}
