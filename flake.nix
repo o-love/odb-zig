@@ -29,6 +29,7 @@
       in rec {
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
+            zls
             zigpkgs.master
           ];
         };
