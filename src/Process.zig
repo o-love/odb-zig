@@ -145,14 +145,26 @@ test "wait_on_signal waits until process finishes" {
     const SIGKILL = std.posix.SIG.KILL;
     const kill_res = p.kill(SIGKILL);
 
-    if (kill_res) {
-        @panic("expected error: process not found");
-    } else |err| {
-        switch (err) {
-            ProcessNotFound => {},
-            else => {
-                return err;
-            },
-        }
-    }
+    try std.testing.expectError(ProcessNotFound, kill_res);
 }
+
+test "launch non existent process returns error" {
+    // TODO: Work on piped error passing from forked process.
+}
+
+test "continue terminated process" {
+    const allocator = std.testing.allocator;
+    const cmd = [_][]const u8{ "/usr/bin/env", "bash", "-c", "sleep 1" };
+
+    const p = try Process.launch(allocator, &cmd);
+    try p.resume_p();
+
+    _ = try p.wait_until_exit();
+ 
+    const not_error = p.resume_p();
+
+    if (not_error) {
+        @panic("Expected an error");
+    } else |_| {}
+}
+
