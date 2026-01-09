@@ -6,6 +6,7 @@ pub const Process = @import("Process.zig");
 pub const Cli = @import("cli.zig").Cli;
 pub const OdbError = @import("errors.zig").OdbError;
 pub const Cmd = @import("cmd.zig").Cmd;
+pub const Pipe = @import("Pipe.zig");
 
 pub const Options = struct {
     pid: u32 = 0,
@@ -56,8 +57,9 @@ pub fn RunDebugger(gpa: Allocator, opts: Options) !void {
     }
 }
 
-test "odb-zig" {
+test {
     _ = @import("cli.zig");
     _ = @import("cmd.zig");
     _ = @import("Process.zig");
+    _ = @import("Pipe.zig");
 }

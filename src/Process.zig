@@ -7,6 +7,7 @@ const PTRACE = std.os.linux.PTRACE;
 const ptrace = system.ptrace;
 const panic = std.debug.panic;
 const OdbError = odg_zig.OdbError;
+const Pipe = odg_zig.Pipe;
 
 const Process = @This();
 
@@ -25,13 +26,25 @@ const Private = struct {
 pid: i32,
 private: Private,
 
-pub fn launch(gpa: Allocator, cmd: []const []const u8) !@This() {
+pub fn launch(io: std.Io, gpa: Allocator, cmd: []const []const u8) !@This() {
     const fork = system.fork;
     const execv = std.process.execv;
+
+    var pipe = try Pipe.create();
+    defer pipe.deinit(io);
+
+    var pipe_buf: [1024]u8 = undefined;
 
     const pid = try fork();
 
     if (pid == 0) {
+        var write_file = try pipe.toWriter(io);
+        defer write_file.close(io);
+
+        var pipe_writer = write_file.writer(io, &pipe_buf);
+        const writer = pipe_writer.interface;
+        _ = writer;
+
         try traceme(0);
 
         const err = execv(gpa, cmd);
@@ -43,6 +56,14 @@ pub fn launch(gpa: Allocator, cmd: []const []const u8) !@This() {
         std.log.err("launch got invalid pid: {d}\n", .{pid});
         return OdbError.InvalidArg;
     }
+
+    var read_file = try pipe.toReader(io);
+    defer read_file.close(io);
+
+    var pipe_reader = read_file.reader(io, &pipe_buf);
+    const reader = pipe_reader.interface;
+
+    _ = reader;
 
     std.log.debug("spawned process with pid: {d}\n", .{pid});
 
@@ -134,9 +155,11 @@ pub fn kill(self: *const @This(), signal: std.posix.SIG) !void {
 
 test "wait_on_signal waits until process finishes" {
     const allocator = std.testing.allocator;
+    const io = std.testing.io;
+
     const cmd = [_][]const u8{ "/usr/bin/env", "bash", "-c", "sleep 1" };
 
-    const p = try Process.launch(allocator, &cmd);
+    const p = try Process.launch(io, allocator, &cmd);
     try p.resume_p();
 
     _ = try p.wait_until_exit();
@@ -154,17 +177,18 @@ test "launch non existent process returns error" {
 
 test "continue terminated process" {
     const allocator = std.testing.allocator;
+    const io = std.testing.io;
+
     const cmd = [_][]const u8{ "/usr/bin/env", "bash", "-c", "sleep 1" };
 
-    const p = try Process.launch(allocator, &cmd);
+    const p = try Process.launch(io, allocator, &cmd);
     try p.resume_p();
 
     _ = try p.wait_until_exit();
- 
+
     const not_error = p.resume_p();
 
     if (not_error) {
         @panic("Expected an error");
     } else |_| {}
 }
-
