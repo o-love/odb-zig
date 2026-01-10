@@ -6,5 +6,7 @@ build-*/
 docgen_tmp/
 .zbscanhelper.zig
 
+*.out
+
 .idea/
 .vscode/

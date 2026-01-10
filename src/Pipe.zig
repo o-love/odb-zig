@@ -53,27 +53,29 @@ fn fileFromFd(fd: i32) File {
     return .{ .handle = fd };
 }
 
-pub fn toReader(pipe: *@This(), io: std.Io) ConversionError!*std.Io.File {
+pub fn toReader(pipe: *@This(), io: std.Io, buffer: []u8) ConversionError!File.Reader {
     if (pipe.writer_file) |w| {
         w.close(io);
         pipe.writer_file = null;
     }
 
     if (pipe.reader_file) |_| {
-        return &pipe.reader_file.?;
+        var file = &pipe.reader_file.?;
+        return file.reader(io, buffer);
     }
 
     return ConversionError.FdAlreadyClosed;
 }
 
-pub fn toWriter(pipe: *@This(), io: std.Io) ConversionError!*std.Io.File {
+pub fn toWriter(pipe: *@This(), io: std.Io, buffer: []u8) ConversionError!File.Writer {
     if (pipe.reader_file) |r| {
         r.close(io);
         pipe.reader_file = null;
     }
 
     if (pipe.writer_file) |_| {
-        return &pipe.writer_file.?;
+        var file = &pipe.writer_file.?;
+        return file.writer(io, buffer);
     }
 
     return ConversionError.FdAlreadyClosed;
@@ -91,25 +93,18 @@ test "Fork pipe IPC" {
     const pid = try fork();
 
     if (pid == 0) {
-        const writer_file = try pipe.toWriter(io);
-        const writer_obj = writer_file.writer(io, &pipe_buf);
-        var writer = writer_obj.interface;
+        var writer = try pipe.toWriter(io, &pipe_buf);
 
-        _ = try writer.write("hello\n");
-        try writer.flush();
+        _ = try writer.interface.write("hello\n");
+        try writer.interface.flush();
 
-        writer_file.close(io);
-
-        std.os.linux.exit(0);
+        pipe.deinit(io);
+        std.process.exit(0);
     }
 
-    const reader_file = try pipe.toReader(io);
-    defer reader_file.close(io);
+    var reader = try pipe.toReader(io, &pipe_buf);
 
-    const reader_obj = reader_file.reader(io, &pipe_buf);
-    var reader = reader_obj.interface;
-
-    const read_result = try reader.takeDelimiter('\n');
+    const read_result = try reader.interface.takeDelimiter('\n');
 
     try std.testing.expect(read_result != null);
 

@@ -38,11 +38,8 @@ pub fn launch(io: std.Io, gpa: Allocator, cmd: []const []const u8) !@This() {
     const pid = try fork();
 
     if (pid == 0) {
-        var write_file = try pipe.toWriter(io);
-        defer write_file.close(io);
 
-        var pipe_writer = write_file.writer(io, &pipe_buf);
-        const writer = pipe_writer.interface;
+        const writer = try pipe.toWriter(io, &pipe_buf);
         _ = writer;
 
         try traceme(0);
@@ -57,12 +54,7 @@ pub fn launch(io: std.Io, gpa: Allocator, cmd: []const []const u8) !@This() {
         return OdbError.InvalidArg;
     }
 
-    var read_file = try pipe.toReader(io);
-    defer read_file.close(io);
-
-    var pipe_reader = read_file.reader(io, &pipe_buf);
-    const reader = pipe_reader.interface;
-
+    const reader = try pipe.toReader(io, &pipe_buf);
     _ = reader;
 
     std.log.debug("spawned process with pid: {d}\n", .{pid});
