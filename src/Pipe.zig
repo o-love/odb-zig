@@ -8,26 +8,34 @@ writer_file: ?File,
 const Pipe = @This();
 
 pub const CreateError = error{
-    PipeCreateError,
     InvalidFdError,
-};
+} || std.posix.PipeError;
 
 pub const ConversionError = error{
     FdAlreadyClosed,
 };
 
-pub fn create() CreateError!@This() {
-    const pipe = std.os.linux.pipe;
+pub const PipeCreateOpts = struct {
+    CLOEXEC: bool = false,
+    DIRECT: bool = false,
+    NONBLOCK: bool = false,
+    // NOTIFICATION_PIPE: bool = false,
+};
+
+pub fn create(opts: PipeCreateOpts) CreateError!@This() {
+    const pipe2 = std.posix.pipe2;
     const min = std.mem.min;
 
-    var pipe_fds = std.mem.zeroes([2]i32);
+    var pipe_fds = try pipe2(
+        .{
+            .CLOEXEC = opts.CLOEXEC,
+            .DIRECT = opts.DIRECT,
+            .NONBLOCK = opts.NONBLOCK,
+            // .NOTIFICATION_PIPE = opts.NOTIFICATION_PIPE,
+        },
+    );
 
-    const pipe_ret = pipe(&pipe_fds);
-    if (pipe_ret != 0) {
-        return CreateError.PipeCreateError;
-    }
-
-    if (min(i32, &pipe_fds) < 0) {
+    if (min(File.Handle, &pipe_fds) < 0) {
         return CreateError.InvalidFdError;
     }
 
@@ -49,7 +57,7 @@ pub fn deinit(pipe: *@This(), io: std.Io) void {
     pipe.* = undefined;
 }
 
-fn fileFromFd(fd: i32) File {
+fn fileFromFd(fd: File.Handle) File {
     return .{ .handle = fd };
 }
 
@@ -85,7 +93,7 @@ test "Fork pipe IPC" {
     const fork = std.posix.fork;
     const io = std.testing.io;
 
-    var pipe = try Pipe.create();
+    var pipe = try Pipe.create(.{});
     defer pipe.deinit(io);
 
     var pipe_buf: [1024]u8 = undefined;

@@ -3,6 +3,7 @@ const odg_zig = @import("root.zig");
 
 const Allocator = std.mem.Allocator;
 const system = std.posix;
+const posix = std.posix;
 const PTRACE = std.os.linux.PTRACE;
 const ptrace = system.ptrace;
 const panic = std.debug.panic;
@@ -27,18 +28,25 @@ pid: i32,
 private: Private,
 
 pub fn launch(io: std.Io, gpa: Allocator, cmd: []const []const u8) !@This() {
-    const fork = system.fork;
     const execv = std.process.execv;
 
-    var pipe = try Pipe.create();
+    var pipe = try Pipe.create(.{ .CLOEXEC = true });
     defer pipe.deinit(io);
 
     var pipe_buf: [1024]u8 = undefined;
 
-    const pid = try fork();
+    const pid_result: posix.pid_t = fork: {
+        const rc = posix.system.fork();
+        switch (posix.errno(rc)) {
+            .SUCCESS => break :fork @intCast(rc),
+            .AGAIN => return error.SystemResources,
+            .NOMEM => return error.SystemResources,
+            .NOSYS => return error.OperationUnsupported,
+            else => |err| return posix.unexpectedErrno(err),
+        }
+    };
 
-    if (pid == 0) {
-
+    if (pid_result == 0) {
         const writer = try pipe.toWriter(io, &pipe_buf);
         _ = writer;
 
@@ -49,18 +57,13 @@ pub fn launch(io: std.Io, gpa: Allocator, cmd: []const []const u8) !@This() {
         panic("execv faild with {}\n", .{err});
     }
 
-    if (pid <= 0) {
-        std.log.err("launch got invalid pid: {d}\n", .{pid});
-        return OdbError.InvalidArg;
-    }
-
     const reader = try pipe.toReader(io, &pipe_buf);
     _ = reader;
 
-    std.log.debug("spawned process with pid: {d}\n", .{pid});
+    std.log.debug("spawned process with pid: {d}\n", .{pid_result});
 
     const self = @This(){
-        .pid = pid,
+        .pid = pid_result,
         .private = .{
             .process_state = State.stopped,
         },
