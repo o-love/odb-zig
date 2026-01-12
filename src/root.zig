@@ -15,13 +15,13 @@ pub const Options = struct {
     output: *std.Io.Writer,
 };
 
-pub fn RunDebugger(gpa: Allocator, opts: Options) !void {
+pub fn RunDebugger(io: std.Io, gpa: Allocator, opts: Options) !void {
     std.log.debug("starting run.", .{});
 
     var process: Process = undefined;
 
     if (opts.pid == 0) {
-        process = try Process.launch(gpa, opts.command);
+        process = try Process.launch(io, gpa, opts.command);
     } else {
         if (std.math.cast(i32, opts.pid)) |pidI| {
             process = try Process.attach(pidI);

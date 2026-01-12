@@ -68,7 +68,7 @@ fn run_debugger(config: Config) !void {
     var input_f_reader = std.Io.File.stdin().reader(config.io, &input_buffer);
     var output_f_writer = std.Io.File.stdout().writer(config.io, &output_buffer);
 
-    try odb_zig.RunDebugger(config.allocator, .{
+    try odb_zig.RunDebugger(config.io, config.allocator, .{
         .command = config.command.items,
         .pid = config.pid orelse 0,
         .input = &input_f_reader.interface,
