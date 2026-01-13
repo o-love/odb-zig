@@ -62,4 +62,8 @@ test {
     _ = @import("cmd.zig");
     _ = @import("Process.zig");
     _ = @import("Pipe.zig");
+    _ = @import("errors.zig");
+    _ = @import("procfs.zig");
+    _ = @import("procfs/process.zig");
+    _ = @import("procfs/stat.zig");
 }

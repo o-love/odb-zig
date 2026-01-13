@@ -2,6 +2,7 @@ const std = @import("std");
 const odb_zig = @import("odb_zig");
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
+const process = std.process;
 
 const Config = struct {
     allocator: Allocator,
@@ -18,25 +19,20 @@ const Config = struct {
     }
 };
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var config = try parse_args(allocator, io);
+pub fn main(init: process.Init) !void {
+    var config = try parse_args(
+        init.minimal.args,
+        init.gpa,
+        init.io,
+    );
     defer config.deinit() catch {};
 
     try run_debugger(config);
 }
 
-fn parse_args(allocator: Allocator, io: std.Io) !Config {
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+fn parse_args(p_args: process.Args, allocator: Allocator, io: std.Io) !Config {
+    const args = try p_args.toSlice(allocator);
+    defer allocator.free(args);
 
     var config = Config{
         .allocator = allocator,
