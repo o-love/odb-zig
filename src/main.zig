@@ -2,12 +2,14 @@ const std = @import("std");
 const odb_zig = @import("odb_zig");
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
+const process = std.process;
 
 const Config = struct {
     allocator: Allocator,
     io: std.Io,
     pid: ?u32 = null,
     command: std.ArrayList([]const u8) = .{},
+    env: *process.Environ.Map,
 
     fn deinit(config: *Config) !void {
         for (config.command.items) |c| {
@@ -18,29 +20,26 @@ const Config = struct {
     }
 };
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var config = try parse_args(allocator, io);
+pub fn main(init: process.Init) !void {
+    var config = try parse_args(
+        init.minimal.args,
+        init.environ_map,
+        init.gpa,
+        init.io,
+    );
     defer config.deinit() catch {};
 
     try run_debugger(config);
 }
 
-fn parse_args(allocator: Allocator, io: std.Io) !Config {
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+fn parse_args(p_args: process.Args, p_env: *process.Environ.Map, allocator: Allocator, io: std.Io) !Config {
+    const args = try p_args.toSlice(allocator);
+    defer allocator.free(args);
 
     var config = Config{
         .allocator = allocator,
         .io = io,
+        .env = p_env,
     };
     errdefer config.deinit() catch {};
 
@@ -70,6 +69,7 @@ fn run_debugger(config: Config) !void {
 
     try odb_zig.RunDebugger(config.io, config.allocator, .{
         .command = config.command.items,
+        .env = config.env,
         .pid = config.pid orelse 0,
         .input = &input_f_reader.interface,
         .output = &output_f_writer.interface,

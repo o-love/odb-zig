@@ -9,7 +9,7 @@ const Pipe = @This();
 
 pub const CreateError = error{
     InvalidFdError,
-} || std.posix.PipeError;
+} || std.Io.Threaded.PipeError;
 
 pub const ConversionError = error{
     FdAlreadyClosed,
@@ -23,7 +23,7 @@ pub const PipeCreateOpts = struct {
 };
 
 pub fn create(opts: PipeCreateOpts) CreateError!@This() {
-    const pipe2 = std.posix.pipe2;
+    const pipe2 = std.Io.Threaded.pipe2;
     const min = std.mem.min;
 
     var pipe_fds = try pipe2(
@@ -90,7 +90,8 @@ pub fn toWriter(pipe: *@This(), io: std.Io, buffer: []u8) ConversionError!File.W
 }
 
 test "Fork pipe IPC" {
-    const fork = std.posix.fork;
+    const posix = std.posix;
+    const linux = std.os.linux;
     const io = std.testing.io;
 
     var pipe = try Pipe.create(.{});
@@ -98,7 +99,16 @@ test "Fork pipe IPC" {
 
     var pipe_buf: [1024]u8 = undefined;
 
-    const pid = try fork();
+    const pid: posix.pid_t = fork: {
+        const rc = linux.fork();
+        switch (posix.errno(rc)) {
+            .SUCCESS => break :fork @intCast(rc),
+            .AGAIN => return error.SystemResources,
+            .NOMEM => return error.SystemResources,
+            .NOSYS => return error.OperationUnsupported,
+            else => |err| return posix.unexpectedErrno(err),
+        }
+    };
 
     if (pid == 0) {
         var writer = try pipe.toWriter(io, &pipe_buf);

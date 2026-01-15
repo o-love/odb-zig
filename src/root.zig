@@ -1,6 +1,7 @@
 //! By convention, root.zig is the root source file when making a library.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Environ = std.process.Environ;
 
 pub const Process = @import("Process.zig");
 pub const Cli = @import("cli.zig").Cli;
@@ -11,6 +12,7 @@ pub const Pipe = @import("Pipe.zig");
 pub const Options = struct {
     pid: u32 = 0,
     command: []const []const u8 = undefined,
+    env: *Environ.Map,
     input: *std.Io.Reader,
     output: *std.Io.Writer,
 };
@@ -21,7 +23,12 @@ pub fn RunDebugger(io: std.Io, gpa: Allocator, opts: Options) !void {
     var process: Process = undefined;
 
     if (opts.pid == 0) {
-        process = try Process.launch(io, gpa, opts.command);
+        process = try Process.launch(.{
+            .cmd = opts.command,
+            .env = opts.env,
+            .gpa = gpa,
+            .io = io,
+        });
     } else {
         if (std.math.cast(i32, opts.pid)) |pidI| {
             process = try Process.attach(pidI);
@@ -62,4 +69,8 @@ test {
     _ = @import("cmd.zig");
     _ = @import("Process.zig");
     _ = @import("Pipe.zig");
+    _ = @import("errors.zig");
+    _ = @import("procfs.zig");
+    _ = @import("procfs/process.zig");
+    _ = @import("procfs/stat.zig");
 }

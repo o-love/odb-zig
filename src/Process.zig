@@ -5,10 +5,12 @@ const Allocator = std.mem.Allocator;
 const system = std.posix;
 const posix = std.posix;
 const PTRACE = std.os.linux.PTRACE;
+const linux = std.os.linux;
 const ptrace = system.ptrace;
 const panic = std.debug.panic;
 const OdbError = odg_zig.OdbError;
 const Pipe = odg_zig.Pipe;
+const Environ = std.process.Environ;
 
 const Process = @This();
 
@@ -27,11 +29,38 @@ const Private = struct {
 pid: i32,
 private: Private,
 
-pub fn launch(io: std.Io, gpa: Allocator, cmd: []const []const u8) !@This() {
-    const execv = std.process.execv;
+fn execv(gpa: Allocator, cmd: []const []const u8, env: *const Environ.Map) !void {
+    var arena_allocator = std.heap.ArenaAllocator.init(gpa);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
 
+    const cmd_buf = try arena.allocSentinel(?[*:0]const u8, cmd.len, null);
+    for (cmd, 0..) |c, i| {
+        cmd_buf[i] = (try arena.dupeZ(u8, c)).ptr;
+    }
+
+    const envPosix = try env.createBlockPosix(arena, .{});
+
+    const execve = std.os.linux.execve;
+    const err = execve(
+        cmd_buf[0].?,
+        cmd_buf.ptr,
+        envPosix,
+    );
+
+    panic("execve faild with {}\n", .{err});
+}
+
+pub const launchParams = struct {
+    io: std.Io,
+    gpa: Allocator,
+    cmd: []const []const u8,
+    env: *const Environ.Map,
+};
+
+pub fn launch(params: launchParams) !@This() {
     var pipe = try Pipe.create(.{ .CLOEXEC = true });
-    defer pipe.deinit(io);
+    defer pipe.deinit(params.io);
 
     var pipe_buf: [1024]u8 = undefined;
 
@@ -47,17 +76,15 @@ pub fn launch(io: std.Io, gpa: Allocator, cmd: []const []const u8) !@This() {
     };
 
     if (pid_result == 0) {
-        const writer = try pipe.toWriter(io, &pipe_buf);
+        const writer = try pipe.toWriter(params.io, &pipe_buf);
         _ = writer;
 
         try traceme(0);
 
-        const err = execv(gpa, cmd);
-
-        panic("execv faild with {}\n", .{err});
+        try execv(params.gpa, params.cmd, params.env);
     }
 
-    const reader = try pipe.toReader(io, &pipe_buf);
+    const reader = try pipe.toReader(params.io, &pipe_buf);
     _ = reader;
 
     std.log.debug("spawned process with pid: {d}\n", .{pid_result});
@@ -106,12 +133,21 @@ fn traceme(pid: i32) !void {
 }
 
 pub fn wait_on_signal(self: *const @This()) u32 {
-    const waitpid = system.waitpid;
+    const waitpid = linux.waitpid;
+    const errno = posix.errno;
+    var status: u32 = undefined;
 
-    const wait_result = waitpid(self.pid, 0);
-    std.log.debug("waitpid for {d} returned {d}\n", .{ wait_result.pid, wait_result.status });
+    while (true) {
+        const wait_result = waitpid(self.pid, &status, 0);
 
-    return wait_result.status;
+        std.log.debug("waitpid for {d} returned {d}\n", .{ wait_result, status });
+
+        switch (errno(wait_result)) {
+            .SUCCESS => return status,
+            .INTR => continue,
+            else => @panic("waitpid error"),
+        }
+    }
 }
 
 pub fn wait_until_exit(self: *const @This()) !u8 {
@@ -153,8 +189,14 @@ test "wait_on_signal waits until process finishes" {
     const io = std.testing.io;
 
     const cmd = [_][]const u8{ "/usr/bin/env", "bash", "-c", "sleep 1" };
+    const env = Environ.Map.init(allocator);
 
-    const p = try Process.launch(io, allocator, &cmd);
+    const p = try Process.launch(.{
+        .env = &env,
+        .cmd = &cmd,
+        .gpa = allocator,
+        .io = io,
+    });
     try p.resume_p();
 
     _ = try p.wait_until_exit();
@@ -175,8 +217,14 @@ test "continue terminated process" {
     const io = std.testing.io;
 
     const cmd = [_][]const u8{ "/usr/bin/env", "bash", "-c", "sleep 1" };
+    const env = Environ.Map.init(allocator);
 
-    const p = try Process.launch(io, allocator, &cmd);
+    const p = try Process.launch(.{
+        .env = &env,
+        .cmd = &cmd,
+        .gpa = allocator,
+        .io = io,
+    });
     try p.resume_p();
 
     _ = try p.wait_until_exit();
