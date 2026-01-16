@@ -52,10 +52,18 @@
           # 1. Check that it builds and passes internal tests
           build = self.packages.${system}.default.overrideAttrs (old: {
             doCheck = true;
+
+            nativeCheckInputs = old.nativeBuildInputs ++ [ pkgs.bash pkgs.coreutils ];
+
             checkPhase = ''
               export HOME=$TMPDIR
-              zig build test
+              export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-global
+              export ZIG_LOCAL_CACHE_DIR=$TMPDIR/zig-local
+
+              export PATH="${pkgs.lib.makeBinPath [ pkgs.bash pkgs.coreutils ]}:$PATH"
+              zig build test --summary all
             '';
+
           });
 
           # 2. Check formatting

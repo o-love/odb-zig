@@ -208,7 +208,7 @@ test "wait_on_signal waits until process finishes" {
     try std.testing.expectError(ProcessNotFound, kill_res);
 }
 
-test "launch non existent process returns error" {
+test "launch non existent binary returns error" {
     // TODO: Work on piped error passing from forked process.
 }
 
