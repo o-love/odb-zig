@@ -113,6 +113,25 @@ pub fn wait_until_exit(self: *const @This()) !u8 {
     }
 }
 
+pub fn exists(self: *const @This()) !bool {
+    const ProcessNotFound = std.posix.KillError.ProcessNotFound;
+
+    const kill_res = self.kill(@enumFromInt(0));
+
+    if (kill_res) {
+        return true;
+    } else |err| {
+        switch (err) {
+            ProcessNotFound => {
+                return false;
+            },
+            else => {
+                return err;
+            },
+        }
+    }
+}
+
 pub fn wait_until_stop(self: *const @This()) !u32 {
     const is_stopped = std.os.linux.W.IFSTOPPED;
     const stop_signal = std.os.linux.W.STOPSIG;
@@ -141,18 +160,22 @@ test "wait_on_signal waits until process finishes" {
 
     _ = try p.wait_until_exit();
 
-    const ProcessNotFound = std.posix.KillError.ProcessNotFound;
-    const SIGKILL = std.posix.SIG.KILL;
-    const kill_res = p.kill(SIGKILL);
+    const does_exist = try p.exists();
 
-    if (kill_res) {
-        @panic("expected error: process not found");
-    } else |err| {
-        switch (err) {
-            ProcessNotFound => {},
-            else => {
-                return err;
-            },
-        }
-    }
+    try std.testing.expectEqual(false, does_exist);
+}
+
+test "continue terminated process" {}
+
+test "wait on terminated process" {}
+
+test "launch non existent program" {
+    const allocator = std.testing.allocator;
+    const cmd = [_][]const u8{ "non_existing_application" };
+
+    const p_res = Process.launch(allocator, &cmd);
+
+    if (p_res) |_| {
+        try std.testing.expect(false);
+    } else |_| {}
 }
