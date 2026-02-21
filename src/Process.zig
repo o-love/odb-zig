@@ -7,28 +7,28 @@ const pid_t = linux.pid_t;
 
 pid: pid_t,
 
-pub const AttatchError = error {
+pub const AttachError = error {
+    InvalidArgument,
     PermissionDenied,
     ProcessNotFound,
 } || linux.LinuxError;
 
-pub fn attatch(pid: pid_t) !@This() {
+pub fn attach(pid: pid_t) AttachError!@This() {
     if (pid <= 0) {
         log.err("Called attach with invalid pid: {}", .{pid});
-        return error.InvalidArgument;
+        return AttachError.InvalidArgument;
     }
 
     linux.attach(pid) catch |err| switch (err) {
         .PERM => {
             log.err("Insufficient permission to attach");
-            return .PermissionDenied;
+            return AttachError.PermissionDenied;
         },
         .SRCH => {
             log.err("Process to attach to not found");
-            return .ProcessNotFound;
+            return AttachError.ProcessNotFound;
         },
         else => {
-            log.debug("Unhandled error for attach ptrace call");
             return err;
         }
     };

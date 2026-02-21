@@ -7,7 +7,7 @@ const errno = linux.errno;
 const PTRACE_FLAGS = linux.PTRACE;
 
 fn ptrace(
-    req: u23,
+    req: u32,
     pid: pid_t,
     addr: usize,
     data: usize,
@@ -17,11 +17,11 @@ fn ptrace(
 
     const result = l_ptrace(req, pid, addr, data, addr2);
 
-    if (result < 0) {
-        return LinuxError.init(result);
-    }
 
-    return void;
+    return switch (LinuxError.init(result)) {
+        .SUCCESS => void,
+        else => |e| e,
+    };
 }
 
 pub fn attach(pid: pid_t) LinuxError!void {
