@@ -2,10 +2,9 @@ const std = @import("std");
 
 const linux = std.os.linux;
 pub const pid_t = linux.pid_t;
-pub const LinuxError = linux.E;
+const LinuxErrorValues = linux.E;
 const errno = linux.errno;
 const PTRACE_FLAGS = linux.PTRACE;
-const panic = std.debug.panic;
 const log = @import("log.zig");
 
 const einval_msg = "EINVAL: Invalid Argument";
@@ -20,10 +19,9 @@ fn ptrace(
 ) LinuxError!void {
     const result = linux.ptrace(req, pid, addr, data, addr2);
 
-    return switch (LinuxError.init(result)) {
-        .SUCCESS => void,
-        .FAULT => panic(efault_msg, .{}),
-        .INVAL => panic(einval_msg, .{}),
+    toLinuxError(result) catch |err| switch (err) {
+        .FAULT => std.debug.panic(efault_msg, .{}),
+        .INVAL => std.debug.panic(einval_msg, .{}),
         else => |e| e,
     };
 }
@@ -41,15 +39,14 @@ pub fn attach(pid: pid_t) LinuxError!void {
 pub fn fork() LinuxError!pid_t {
     const result = linux.fork();
 
-    switch (LinuxError.init(result)) {
-        .SUCCESS => return @intCast(result),
-        else => |err| return err,
-    }
+    try toLinuxError(result);
+
+    return @intCast(result);
 }
 
 pub const WaitPidResult = struct {
     pid: pid_t,
-    status: u32,
+    status: WaitPidStatus,
 };
 
 pub const WaitPidStatus = union(enum) {
@@ -61,7 +58,7 @@ pub const WaitPidStatus = union(enum) {
 
 pub const WaitPidError = error{
     InvalidStatus,
-};
+} || LinuxError;
 
 fn mapWaitPid(status: u32) WaitPidError!WaitPidStatus {
     const W = linux.W;
@@ -92,19 +89,19 @@ test mapWaitPid {
     try expectEqual(WaitPidStatus{ .Exited = .{ .exit_status = 0 } }, res);
 }
 
-pub fn waitpid(pid: pid_t, flags: u32) !WaitPidResult {
+pub fn waitpid(pid: pid_t, flags: u32) WaitPidError!WaitPidResult {
     var status: u32 = undefined;
 
     while (true) {
         const result = linux.waitpid(pid, &status, flags);
 
-        switch (LinuxError.init(result)) {
+        switch (toLinuxError(result)) {
             .SUCCESS => return .{
                 .pid = @intCast(result),
-                .status = @bitCast(status),
+                .status = try mapWaitPid(status),
             },
             .INTR => continue,
-            .INVAL => panic(einval_msg, .{}),
+            .INVAL => std.debug.panic(einval_msg, .{}),
             else => |err| return err,
         }
     }
@@ -114,8 +111,64 @@ pub fn execve(
     path: [*:0]const u8,
     argv: [*:null]const ?[*:0]const u8,
     envp: [*:null]const ?[*:0]const u8,
-) !void {
+) LinuxError!void {
     const result = linux.execve(path, argv, envp);
 
-    return LinuxError.init(result);
+    try toLinuxError(result);
+}
+
+pub const LinuxError = errorFromErrno(LinuxErrorValues);
+
+fn toLinuxError(value: usize) LinuxError!void {
+    switch (LinuxErrorValues.init(value)) {
+        .SUCCESS => return,
+        else => |e| {
+            const e_value = @intFromEnum(e);
+
+            inline for (@typeInfo(LinuxError).error_set.?) |err| {
+                const err_val = @intFromEnum(@field(LinuxErrorValues, err.name));
+                if (err_val == e_value) {
+                    return @field(LinuxError, err.name);
+                }
+            }
+
+            unreachable;
+        },
+    }
+}
+
+test toLinuxError {
+    const testing = std.testing;
+    const expectError = testing.expectError;
+
+    try toLinuxError(0);
+
+    const err_int: i64 = -1 * @as(i32, @intFromEnum(LinuxErrorValues.INTR));
+    try expectError(
+        LinuxError.INTR,
+        toLinuxError(@bitCast(err_int)),
+    );
+}
+
+fn errorFromErrno(comptime err_enum: type) type {
+    const Error = std.builtin.Type.Error;
+
+    const enum_fields = @typeInfo(err_enum).@"enum".fields;
+
+    comptime var errs: []const Error = &.{};
+    inline for (enum_fields) |field| {
+        if (std.mem.eql(u8, field.name, "SUCCESS")) {
+            continue;
+        }
+
+        const e = Error{
+            .name = field.name,
+        };
+
+        errs = errs ++ .{e};
+    }
+
+    const e_set = @Type(.{ .error_set = errs[0..] });
+
+    return e_set;
 }

@@ -11,6 +11,12 @@ const panic = std.debug.panic;
 const Process = @This();
 
 pid: pid_t,
+state: State,
+
+const State = enum {
+    Running,
+    Stopped,
+};
 
 pub const AttachError = error{
     InvalidArgument,
@@ -40,6 +46,7 @@ pub fn attach(pid: pid_t) AttachError!@This() {
 
     return @This(){
         .pid = pid,
+        .state = .Stopped,
     };
 }
 
@@ -73,6 +80,7 @@ pub fn launch(
 
     return .{
         .pid = pid,
+        .state = .Stopped,
     };
 }
 
