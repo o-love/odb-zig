@@ -1,12 +1,16 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
+const panic = std.debug.panic;
 
 const linux = @import("linux.zig");
 const pid_t = linux.pid_t;
-const log = @import("log.zig");
 const LinuxError = linux.LinuxError;
-const panic = std.debug.panic;
+pub const LaunchError = LinuxError;
+const log = @import("log.zig");
+const kill = linux.kill;
+const SIGNAL = linux.SIGNAL;
+const waitpid = linux.waitpid;
 
 const Process = @This();
 
@@ -50,13 +54,10 @@ pub fn attach(pid: pid_t) AttachError!@This() {
     };
 }
 
-pub const LaunchError = LinuxError;
-
 pub fn launch(
     cmd: [*:null]const [*:0]const u8,
     envp: [*:null]const [*:0]const u8,
 ) LaunchError!@This() {
-    const waitpid = linux.waitpid;
     const fork = linux.fork;
     const execve = linux.execve;
 
@@ -82,6 +83,23 @@ pub fn launch(
         .pid = pid,
         .state = .Stopped,
     };
+}
+
+pub fn deinit(self: *@This()) !void {
+    const dettach = linux.dettach;
+
+    const pid = self.pid;
+    assert(pid != 0);
+
+    if (self.state == .Running) {
+        try kill(pid, SIGNAL.STOP);
+        _ = try waitpid(pid, 0);
+    }
+
+    try dettach(pid);
+
+    try kill(pid, SIGNAL.KILL);
+    _ = try waitpid(pid, 0);
 }
 
 test "attatch to process" {}

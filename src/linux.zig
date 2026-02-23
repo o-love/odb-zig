@@ -10,6 +10,8 @@ const log = @import("log.zig");
 const einval_msg = "EINVAL: Invalid Argument";
 const efault_msg = "EFAULT: Bad Address";
 
+pub const SIGNAL = linux.SIG;
+
 fn ptrace(
     req: u32,
     pid: pid_t,
@@ -34,6 +36,22 @@ pub fn attach(pid: pid_t) LinuxError!void {
         0,
         0,
     );
+}
+
+pub fn dettach(pid: pid_t) LinuxError!void {
+    return ptrace(
+        PTRACE_FLAGS.DETACH,
+        pid,
+        0,
+        0,
+        0,
+    );
+}
+
+pub fn kill(pid: pid_t, signal: i32) LinuxError!void {
+    const result = linux.kill(pid, signal);
+
+    try toLinuxError(result);
 }
 
 pub fn fork() LinuxError!pid_t {
