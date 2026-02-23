@@ -95,15 +95,16 @@ pub fn waitpid(pid: pid_t, flags: u32) WaitPidError!WaitPidResult {
     while (true) {
         const result = linux.waitpid(pid, &status, flags);
 
-        switch (toLinuxError(result)) {
-            .SUCCESS => return .{
-                .pid = @intCast(result),
-                .status = try mapWaitPid(status),
-            },
-            .INTR => continue,
-            .INVAL => std.debug.panic(einval_msg, .{}),
-            else => |err| return err,
-        }
+        toLinuxError(result) catch |err| switch (err) {
+            LinuxError.INTR => continue,
+            LinuxError.INVAL => std.debug.panic(einval_msg, .{}),
+            else => return err,
+        };
+
+        return .{
+            .pid = @intCast(result),
+            .status = try mapWaitPid(status),
+        };
     }
 }
 
@@ -115,6 +116,27 @@ pub fn execve(
     const result = linux.execve(path, argv, envp);
 
     try toLinuxError(result);
+}
+
+test "execve fork and wait pipeline" {
+    const path = "/bin/bash";
+    const argv = [_:null]?[*:0]const u8{ "/bin/bash", "-c", "echo hello" };
+    const envp = [_:null]?[*:0]const u8{"PATH=/bin"};
+
+    const pid = try fork();
+
+    if (pid == 0) {
+        const devnull: i32 = @intCast(linux.openat(linux.AT.FDCWD, "/dev/null", .{ .ACCMODE = .RDWR }, 0));
+        _ = linux.dup2(devnull, 1);
+        _ = linux.dup2(devnull, 2);
+        _ = linux.close(devnull);
+
+        try execve(path, &argv, &envp);
+
+        unreachable;
+    }
+
+    _ = try waitpid(pid, linux.W.UNTRACED);
 }
 
 pub const LinuxError = errorFromErrno(LinuxErrorValues);
