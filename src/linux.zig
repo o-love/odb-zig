@@ -28,7 +28,17 @@ fn ptrace(
     };
 }
 
-pub fn attach(pid: pid_t) LinuxError!void {
+pub fn ptrace_traceme() LinuxError!void {
+    return ptrace(
+        PTRACE_FLAGS.TRACEME,
+        0,
+        0,
+        0,
+        0,
+    );
+}
+
+pub fn ptrace_attach(pid: pid_t) LinuxError!void {
     return ptrace(
         PTRACE_FLAGS.ATTACH,
         pid,
@@ -38,9 +48,19 @@ pub fn attach(pid: pid_t) LinuxError!void {
     );
 }
 
-pub fn dettach(pid: pid_t) LinuxError!void {
+pub fn ptrace_dettach(pid: pid_t) LinuxError!void {
     return ptrace(
         PTRACE_FLAGS.DETACH,
+        pid,
+        0,
+        0,
+        0,
+    );
+}
+
+pub fn ptrace_continue(pid: pid_t) LinuxError!void {
+    return ptrace(
+        PTRACE_FLAGS.CONT,
         pid,
         0,
         0,

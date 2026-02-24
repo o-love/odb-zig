@@ -20,6 +20,7 @@ state: State,
 const State = enum {
     Running,
     Stopped,
+    Done,
 };
 
 pub const AttachError = error{
@@ -34,7 +35,7 @@ pub fn attach(pid: pid_t) AttachError!@This() {
         return AttachError.InvalidArgument;
     }
 
-    linux.attach(pid) catch |err| switch (err) {
+    linux.ptrace_attach(pid) catch |err| switch (err) {
         .PERM => {
             log.err("Insufficient permission to attach");
             return AttachError.PermissionDenied;
@@ -60,6 +61,7 @@ pub fn launch(
 ) LaunchError!@This() {
     const fork = linux.fork;
     const execve = linux.execve;
+    const traceme = linux.ptrace_traceme;
 
     const pid = try fork();
     assert(pid >= 0);
@@ -67,7 +69,7 @@ pub fn launch(
     if (pid == 0) {
         // Forked process
 
-        // TODO: Add traceme
+        traceme();
 
         execve(cmd[0], cmd, envp);
 
@@ -85,8 +87,39 @@ pub fn launch(
     };
 }
 
+test launch {
+    const argv = [_:null][*:0]const u8{ "/bin/bash", "-c", "echo hello" };
+    const envp = [_:null][*:0]const u8{"PATH=/bin"};
+
+    const proccess = Process.launch(argv, envp);
+    defer proccess.deinit();
+}
+
+pub fn resume_p(self: *@This()) !void {
+    const cont = linux.ptrace_continue;
+    try cont(self.pid);
+
+    self.state = .Running;
+}
+
+pub fn wait(self: *@This()) !State {
+    const result = try waitpid(self.pid, 0);
+
+    const state = switch (result) {
+        .Exited => State.Done,
+        .Signaled => State.Done,
+        .Stopped => State.Stopped,
+        .Continued => unreachable,
+    };
+
+    self.state = state;
+    return state;
+}
+
+pub fn stop(_: *@This()) !void {}
+
 pub fn deinit(self: *@This()) !void {
-    const dettach = linux.dettach;
+    const dettach = linux.ptrace_dettach;
 
     const pid = self.pid;
     assert(pid != 0);
