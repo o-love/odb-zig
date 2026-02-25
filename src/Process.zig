@@ -6,11 +6,11 @@ const panic = std.debug.panic;
 const linux = @import("linux.zig");
 const pid_t = linux.pid_t;
 const LinuxError = linux.LinuxError;
-pub const LaunchError = LinuxError;
 const log = @import("log.zig");
 const kill = linux.kill;
 const SIGNAL = linux.SIGNAL;
 const waitpid = linux.waitpid;
+const WaitPidError = linux.WaitPidError;
 
 const Process = @This();
 
@@ -55,9 +55,10 @@ pub fn attach(pid: pid_t) AttachError!@This() {
     };
 }
 
+pub const LaunchError = LinuxError || WaitPidError;
 pub fn launch(
-    cmd: [*:null]const [*:0]const u8,
-    envp: [*:null]const [*:0]const u8,
+    cmd: [*:null]const ?[*:0]const u8,
+    envp: [*:null]const ?[*:0]const u8,
 ) LaunchError!@This() {
     const fork = linux.fork;
     const execve = linux.execve;
@@ -69,9 +70,9 @@ pub fn launch(
     if (pid == 0) {
         // Forked process
 
-        traceme();
+        try traceme();
 
-        execve(cmd[0], cmd, envp);
+        execve(cmd[0].?, cmd, envp) catch {};
 
         // TODO: Return error with pipe
 
@@ -88,16 +89,16 @@ pub fn launch(
 }
 
 test launch {
-    const argv = [_:null][*:0]const u8{ "/bin/bash", "-c", "echo hello" };
-    const envp = [_:null][*:0]const u8{"PATH=/bin"};
+    const argv = [_:null]?[*:0]const u8{ "/bin/bash", "-c", "echo hello" };
+    const envp = [_:null]?[*:0]const u8{"PATH=/bin"};
 
-    const proccess = Process.launch(argv, envp);
+    var proccess = try Process.launch(&argv, &envp);
     defer proccess.deinit();
 }
 
-pub fn resume_p(self: *@This()) !void {
-    const cont = linux.ptrace_continue;
-    try cont(self.pid);
+pub fn cont(self: *@This()) !void {
+    const p_cont = linux.ptrace_continue;
+    try p_cont(self.pid);
 
     self.state = .Running;
 }
@@ -105,7 +106,7 @@ pub fn resume_p(self: *@This()) !void {
 pub fn wait(self: *@This()) !State {
     const result = try waitpid(self.pid, 0);
 
-    const state = switch (result) {
+    const state = switch (result.status) {
         .Exited => State.Done,
         .Signaled => State.Done,
         .Stopped => State.Stopped,
@@ -116,13 +117,32 @@ pub fn wait(self: *@This()) !State {
     return state;
 }
 
+test "wait for launched process" {
+    const argv = [_:null]?[*:0]const u8{ "/bin/bash", "-c", "echo hello" };
+    const envp = [_:null]?[*:0]const u8{"PATH=/bin"};
+
+    var proccess = try Process.launch(&argv, &envp);
+    defer proccess.deinit();
+
+    try proccess.cont();
+
+    while (try proccess.wait() != .Done) {
+        try proccess.cont();
+    }
+}
+
 pub fn stop(_: *@This()) !void {}
 
-pub fn deinit(self: *@This()) !void {
+pub fn rawDeinit(self: *@This()) !void {
     const dettach = linux.ptrace_dettach;
 
     const pid = self.pid;
     assert(pid != 0);
+
+    defer {
+        self.state = .Done;
+        self.pid = -1;
+    }
 
     if (self.state == .Running) {
         try kill(pid, SIGNAL.STOP);
@@ -135,4 +155,9 @@ pub fn deinit(self: *@This()) !void {
     _ = try waitpid(pid, 0);
 }
 
-test "attatch to process" {}
+
+pub fn deinit(self: *@This()) void {
+    self.rawDeinit() catch |e| {
+        log.err("Failed to deinit Process with {s}", .{ @errorName(e) });
+    };
+}

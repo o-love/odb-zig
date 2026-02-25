@@ -3,7 +3,6 @@ const std = @import("std");
 const linux = std.os.linux;
 pub const pid_t = linux.pid_t;
 const LinuxErrorValues = linux.E;
-const errno = linux.errno;
 const PTRACE_FLAGS = linux.PTRACE;
 const log = @import("log.zig");
 
@@ -22,9 +21,9 @@ fn ptrace(
     const result = linux.ptrace(req, pid, addr, data, addr2);
 
     toLinuxError(result) catch |err| switch (err) {
-        .FAULT => std.debug.panic(efault_msg, .{}),
-        .INVAL => std.debug.panic(einval_msg, .{}),
-        else => |e| e,
+        LinuxError.FAULT => std.debug.panic(efault_msg, .{}),
+        LinuxError.INVAL => std.debug.panic(einval_msg, .{}),
+        else => |e| return e,
     };
 }
 
@@ -154,6 +153,13 @@ pub fn execve(
     const result = linux.execve(path, argv, envp);
 
     try toLinuxError(result);
+}
+
+pub fn rerouteStdToNull() void {
+    const devnull: i32 = @intCast(linux.openat(linux.AT.FDCWD, "/dev/null", .{ .ACCMODE = .RDWR }, 0));
+    _ = linux.dup2(devnull, 1);
+    _ = linux.dup2(devnull, 2);
+    _ = linux.close(devnull);
 }
 
 test "execve fork and wait pipeline" {
