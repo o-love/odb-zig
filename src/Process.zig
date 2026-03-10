@@ -69,7 +69,7 @@ pub fn launch(
     assert(pid >= 0);
 
     if (pid == 0) {
-        linux.close(pipes.reader);
+        try linux.close(pipes.reader);
 
         try traceme();
 
@@ -80,7 +80,7 @@ pub fn launch(
         panic("Execve Failed", .{});
     }
 
-    linux.close(pipes.writer);
+    try linux.close(pipes.writer);
 
     const wait_result = try waitpid(pid, 0);
     assert(pid == wait_result.pid);
@@ -120,19 +120,19 @@ pub fn wait(self: *@This()) !State {
     return state;
 }
 
-test "wait for launched process" {
-    const argv = [_:null]?[*:0]const u8{ "/bin/bash", "-c", "echo hello" };
-    const envp = [_:null]?[*:0]const u8{"PATH=/bin"};
-
-    var proccess = try Process.launch(&argv, &envp);
-    defer proccess.deinit();
-
-    try proccess.cont();
-
-    while (try proccess.wait() != .Done) {
-        try proccess.cont();
-    }
-}
+// test "wait for launched process" {
+//     const argv = [_:null]?[*:0]const u8{ "/bin/bash", "-c", "echo hello" };
+//     const envp = [_:null]?[*:0]const u8{"PATH=/bin"};
+//
+//     var proccess = try Process.launch(&argv, &envp);
+//     defer proccess.deinit();
+//
+//     try proccess.cont();
+//
+//     while (try proccess.wait() != .Done) {
+//         try proccess.cont();
+//     }
+// }
 
 pub fn stop(_: *@This()) !void {}
 

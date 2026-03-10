@@ -10,7 +10,12 @@ const einval_msg = "EINVAL: Invalid Argument";
 const efault_msg = "EFAULT: Bad Address";
 
 pub const SIGNAL = linux.SIG;
-pub const close = linux.close;
+
+pub fn close(fd: i32) LinuxError!void {
+    const result = linux.close(fd);
+
+    try toLinuxError(result);
+}
 
 fn ptrace(
     req: u32,
@@ -164,7 +169,7 @@ pub const PipeResult = struct {
 pub fn pipe() LinuxError!PipeResult {
     const pipe2 = linux.pipe2;
 
-    const pipefd: []i32 = undefined;
+    var pipefd: [2]i32 = undefined;
     const result = pipe2(&pipefd, .{ .CLOEXEC = true });
 
     try toLinuxError(result);
@@ -174,6 +179,48 @@ pub fn pipe() LinuxError!PipeResult {
         .writer = pipefd[1],
     };
 }
+
+test pipe {
+    const testing = std.testing;
+
+    const printString = "Hey, how are you";
+
+    const pipes = try pipe();
+    const pid = try fork();
+
+    if (pid == 0) {
+        try close(pipes.reader);
+        rerouteStdToNull();
+
+        const file = std.fs.File{ .handle = pipes.writer};
+
+        var buffer: [1024]u8 = undefined;
+
+        var writer = file.writer(&buffer);
+        try writer.interface.writeAll(printString);
+        try writer.interface.flush();
+
+        file.close();
+
+        linux.exit(0);
+    }
+
+    try close(pipes.writer);
+    _ = try waitpid(pid, 0);
+
+    const file = std.fs.File{ .handle = pipes.reader };
+
+    var buffer: [1024]u8 = undefined;
+
+    var reader = file.reader(&buffer);
+
+    var readBuffer: [1024]u8 = undefined;
+    const len = try reader.interface.readSliceShort(&readBuffer);
+    const resultString = readBuffer[0..len];
+
+    try testing.expectEqualStrings(resultString, printString);
+}
+
 
 pub fn rerouteStdToNull() void {
     const devnull: i32 = @intCast(linux.openat(linux.AT.FDCWD, "/dev/null", .{ .ACCMODE = .RDWR }, 0));
