@@ -10,6 +10,7 @@ const einval_msg = "EINVAL: Invalid Argument";
 const efault_msg = "EFAULT: Bad Address";
 
 pub const SIGNAL = linux.SIG;
+pub const close = linux.close;
 
 fn ptrace(
     req: u32,
@@ -153,6 +154,25 @@ pub fn execve(
     const result = linux.execve(path, argv, envp);
 
     try toLinuxError(result);
+}
+
+pub const PipeResult = struct {
+    reader: i32,
+    writer: i32,
+};
+
+pub fn pipe() LinuxError!PipeResult {
+    const pipe2 = linux.pipe2;
+
+    const pipefd: []i32 = undefined;
+    const result = pipe2(&pipefd, .{ .CLOEXEC = true });
+
+    try toLinuxError(result);
+
+    return .{
+        .reader = pipefd[0],
+        .writer = pipefd[1],
+    };
 }
 
 pub fn rerouteStdToNull() void {

@@ -64,11 +64,12 @@ pub fn launch(
     const execve = linux.execve;
     const traceme = linux.ptrace_traceme;
 
+    const pipes: linux.PipeResult = try linux.pipe();
     const pid = try fork();
     assert(pid >= 0);
 
     if (pid == 0) {
-        // Forked process
+        linux.close(pipes.reader);
 
         try traceme();
 
@@ -78,6 +79,8 @@ pub fn launch(
 
         panic("Execve Failed", .{});
     }
+
+    linux.close(pipes.writer);
 
     const wait_result = try waitpid(pid, 0);
     assert(pid == wait_result.pid);
