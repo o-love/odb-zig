@@ -1,21 +1,62 @@
 //! By convention, root.zig is the root source file when making a library.
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+const Process = @import("Process.zig");
+const Cli = @import("cli.zig").Cli;
+const cUtils = @import("cUtils.zig");
 
-pub fn bufferedPrint() !void {
-    // Stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    const stdout = &stdout_writer.interface;
+pub const Options = struct {
+    pid: u32 = 0,
+    command: []const [:0]const u8 = undefined,
+    envp: []const [:0]const u8 = undefined,
+    input: *std.Io.Reader,
+    output: *std.Io.Writer,
+};
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+pub fn RunDebugger(gpa: Allocator, opts: Options) !void {
+    std.log.debug("starting run.", .{});
 
-    try stdout.flush(); // Don't forget to flush!
-}
+    var process: Process = undefined;
 
-pub fn add(a: i32, b: i32) i32 {
-    return a + b;
+    if (opts.pid == 0) {
+        const toC = cUtils.toCStringArray;
+        const cmd = try toC(gpa, opts.command);
+        const envp = try toC(gpa, opts.envp);
+
+        process = try Process.launch(cmd, envp);
+    } else {
+        if (std.math.cast(i32, opts.pid)) |pidI| {
+            process = try Process.attach(pidI);
+        } else {
+            std.log.err("Unable to cast pid to i32", .{});
+            return;
+        }
+    }
+
+    var cli = try Cli.build(gpa, opts.input, opts.output);
+    defer cli.deinit() catch {};
+
+    var status: i32 = 0;
+    while (status >= 0) {
+        const cmd = cli.ask_cmd() catch |err| {
+            switch (err) {
+                else => {
+                    return err;
+                },
+            }
+        };
+
+        status = cli.handle_cmd(cmd, &process) catch |err| {
+            switch (err) {
+                .ExitRequest => {
+                    break;
+                },
+                else => {
+                    return err;
+                },
+            }
+        };
+    }
 }
 
 test {

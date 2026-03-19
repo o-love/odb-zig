@@ -2,26 +2,72 @@ const std = @import("std");
 const odb_zig = @import("odb_zig");
 
 pub fn main() !void {
-    // Prints to stderr, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-    try odb_zig.bufferedPrint();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    const allocator = gpa.allocator();
+
+    var config = try parse_args(allocator);
+    defer config.deinit() catch {};
+
+    try run_debugger(config);
 }
 
-test "simple test" {
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(i32) = .empty;
-    defer list.deinit(gpa); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(gpa, 42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
+const Config = struct {
+    allocator: std.mem.Allocator,
+    pid: ?u32 = null,
+    command: std.ArrayList([:0]const u8) = .{},
+    environment: std.ArrayList([:0]const u8) = .{},
 
-test "fuzz example" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
+    fn deinit(config: *Config) !void {
+        for (config.command.items) |c| {
+            config.allocator.free(c);
         }
+
+        config.command.deinit(config.allocator);
+    }
+};
+
+fn parse_args(allocator: std.mem.Allocator) !Config {
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    var config = Config{
+        .allocator = allocator,
     };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
+    errdefer config.deinit() catch {};
+
+    var i: usize = 1;
+    while (i < args.len) : (i += 1) {
+        if (std.mem.eql(u8, args[i], "--pid")) {
+            i += 1;
+            config.pid = std.fmt.parseInt(u32, args[i], 10) catch {
+                std.log.err("Unable to parse --pid as int: '{s}'", .{args[i]});
+                return error.InvalidArgs;
+            };
+        } else {
+            const dupe = try allocator.dupeZ(u8, args[i]);
+            try config.command.append(allocator, dupe);
+        }
+    }
+
+    return config;
+}
+
+fn run_debugger(config: Config) !void {
+    var input_buffer: [1024]u8 = undefined;
+    var output_buffer: [1024]u8 = undefined;
+
+    var input_f_reader = std.fs.File.stdin().reader(&input_buffer);
+    var output_f_writer = std.fs.File.stdout().writer(&output_buffer);
+
+    try odb_zig.RunDebugger(config.allocator, .{
+        .command = config.command.items,
+        .envp = config.environment.items,
+        .pid = config.pid orelse 0,
+        .input = &input_f_reader.interface,
+        .output = &output_f_writer.interface,
+    });
+
+    try output_f_writer.interface.flush();
 }
