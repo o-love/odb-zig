@@ -190,9 +190,11 @@ test pipe {
 
     if (pid == 0) {
         try close(pipes.reader);
-        rerouteStdToNull();
+        rerouteStdToNull() catch {
+            std.process.exit(1);
+        };
 
-        const file = std.fs.File{ .handle = pipes.writer};
+        const file = std.fs.File{ .handle = pipes.writer };
 
         var buffer: [1024]u8 = undefined;
 
@@ -221,31 +223,39 @@ test pipe {
     try testing.expectEqualStrings(resultString, printString);
 }
 
+pub fn openat(dirfd: i32, path: [*:0]const u8, flags: linux.O, mode: linux.mode_t) LinuxError!i32 {
+    const fd_result = linux.openat(dirfd, path, flags, mode);
 
-pub fn rerouteStdToNull() void {
-    const devnull: i32 = @intCast(linux.openat(linux.AT.FDCWD, "/dev/null", .{ .ACCMODE = .RDWR }, 0));
+    try toLinuxError(fd_result);
+
+    return @intCast(fd_result);
+}
+
+pub fn rerouteStdToNull() !void {
+    const devnull: i32 = try openat(linux.AT.FDCWD, "/dev/null", .{ .ACCMODE = .RDWR }, 0);
     _ = linux.dup2(devnull, 1);
     _ = linux.dup2(devnull, 2);
     _ = linux.close(devnull);
 }
 
 test "execve fork and wait pipeline" {
-    const path = "/bin/bash";
-    const argv = [_:null]?[*:0]const u8{ "/bin/bash", "-c", "echo hello" };
+    const path = "/bin/sh";
+    const argv = [_:null]?[*:0]const u8{ "/bin/sh", "-c", "echo hello" };
     const envp = [_:null]?[*:0]const u8{"PATH=/bin"};
 
     const pid = try fork();
 
     if (pid == 0) {
-        const devnull: i32 = @intCast(linux.openat(linux.AT.FDCWD, "/dev/null", .{ .ACCMODE = .RDWR }, 0));
-        _ = linux.dup2(devnull, 1);
-        _ = linux.dup2(devnull, 2);
-        _ = linux.close(devnull);
+        rerouteStdToNull() catch {
+            std.process.exit(1);
+        };
 
-        try execve(path, &argv, &envp);
+        execve(path, &argv, &envp) catch std.process.exit(1);
 
         unreachable;
     }
+
+    try std.testing.expect(pid > 0);
 
     _ = try waitpid(pid, linux.W.UNTRACED);
 }

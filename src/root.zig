@@ -48,7 +48,7 @@ pub fn RunDebugger(gpa: Allocator, opts: Options) !void {
 
         status = cli.handle_cmd(cmd, &process) catch |err| {
             switch (err) {
-                .ExitRequest => {
+                error.ExitRequest => {
                     break;
                 },
                 else => {

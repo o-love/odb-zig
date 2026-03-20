@@ -36,12 +36,12 @@ pub fn attach(pid: pid_t) AttachError!@This() {
     }
 
     linux.ptrace_attach(pid) catch |err| switch (err) {
-        .PERM => {
-            log.err("Insufficient permission to attach");
+        LinuxError.PERM => {
+            log.err("Insufficient permission to attach", .{});
             return AttachError.PermissionDenied;
         },
-        .SRCH => {
-            log.err("Process to attach to not found");
+        LinuxError.SRCH => {
+            log.err("Process to attach to not found", .{});
             return AttachError.ProcessNotFound;
         },
         else => {
@@ -73,11 +73,10 @@ pub fn launch(
 
         try traceme();
 
-        execve(cmd[0].?, cmd, envp) catch {};
-
-        // TODO: Return error with pipe
-
-        panic("Execve Failed", .{});
+        execve(cmd[0].?, cmd, envp) catch {
+            // TODO: Return error with pipe
+            std.process.exit(1);
+        };
     }
 
     try linux.close(pipes.writer);
@@ -92,7 +91,7 @@ pub fn launch(
 }
 
 test launch {
-    const argv = [_:null]?[*:0]const u8{ "/bin/bash", "-c", "echo hello" };
+    const argv = [_:null]?[*:0]const u8{ "/bin/sh", "-c", "echo hello" };
     const envp = [_:null]?[*:0]const u8{"PATH=/bin"};
 
     var proccess = try Process.launch(&argv, &envp);
@@ -121,7 +120,7 @@ pub fn wait(self: *@This()) !State {
 }
 
 // test "wait for launched process" {
-//     const argv = [_:null]?[*:0]const u8{ "/bin/bash", "-c", "echo hello" };
+//     const argv = [_:null]?[*:0]const u8{ "/bin/sh", "-c", "echo hello" };
 //     const envp = [_:null]?[*:0]const u8{"PATH=/bin"};
 //
 //     var proccess = try Process.launch(&argv, &envp);
@@ -158,9 +157,8 @@ pub fn rawDeinit(self: *@This()) !void {
     _ = try waitpid(pid, 0);
 }
 
-
 pub fn deinit(self: *@This()) void {
     self.rawDeinit() catch |e| {
-        log.err("Failed to deinit Process with {s}", .{ @errorName(e) });
+        log.err("Failed to deinit Process with {s}", .{@errorName(e)});
     };
 }
