@@ -1,6 +1,6 @@
-
 const std = @import("std");
 const Process = @import("Process.zig");
+const log = @import("log.zig");
 
 pub const Cmd = union(enum) {
     ping: Ping,
@@ -86,13 +86,15 @@ const Cont = struct {
         _: Self,
         params: Cmd.RunParams,
     ) !i32 {
-        errdefer params.output.print("failed to continue\n", .{}) catch {};
+        errdefer log.err("failed to continue\n", .{});
 
         const process: *Process = params.process orelse return error.InvalidArg;
 
-        try process.cont();
+        if (!try process.cont()) {
+            return error.ExitRequest;
+        }
 
-        try params.output.print("continuing {d}\n", .{process.pid});
+        log.info("continuing {d}\n", .{process.pid});
 
         _ = try process.wait();
 
@@ -113,7 +115,9 @@ const Breakpoint = struct {
         _: Self,
         params: Cmd.RunParams,
     ) !i32 {
-        try params.output.print("break\n", .{});
+        _ = params;
+
+        log.info("break\n", .{});
         return 0;
     }
 };

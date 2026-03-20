@@ -98,11 +98,21 @@ test launch {
     defer proccess.deinit();
 }
 
-pub fn cont(self: *@This()) !void {
+pub fn cont(self: *@This()) !bool {
     const p_cont = linux.ptrace_continue;
-    try p_cont(self.pid);
+    p_cont(self.pid) catch |err| switch (err) {
+        LinuxError.SRCH => {
+            log.info("Process has exited, failed to continue", .{});
+            self.state = .Done;
+            return false;
+        },
+        else => {
+            return err;
+        },
+    };
 
     self.state = .Running;
+    return true;
 }
 
 pub fn wait(self: *@This()) !State {
