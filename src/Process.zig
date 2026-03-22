@@ -3,14 +3,14 @@ const assert = std.debug.assert;
 const testing = std.testing;
 const panic = std.debug.panic;
 
-const linux = @import("linux.zig");
-const pid_t = linux.pid_t;
-const LinuxError = linux.LinuxError;
+const zignux = @import("zignux");
+const pid_t = zignux.pid_t;
+const LinuxError = zignux.LinuxError;
 const log = @import("log.zig");
-const kill = linux.kill;
-const SIGNAL = linux.SIGNAL;
-const waitpid = linux.waitpid;
-const WaitPidError = linux.WaitPidError;
+const kill = zignux.kill;
+const SIGNAL = zignux.SIGNAL;
+const waitpid = zignux.waitpid;
+const WaitPidError = zignux.WaitPidError;
 
 const Process = @This();
 
@@ -35,7 +35,7 @@ pub fn attach(pid: pid_t) AttachError!@This() {
         return AttachError.InvalidArgument;
     }
 
-    linux.ptrace_attach(pid) catch |err| switch (err) {
+    zignux.ptraceFuncs.attach(pid) catch |err| switch (err) {
         LinuxError.PERM => {
             log.err("Insufficient permission to attach", .{});
             return AttachError.PermissionDenied;
@@ -60,16 +60,16 @@ pub fn launch(
     cmd: [*:null]const ?[*:0]const u8,
     envp: [*:null]const ?[*:0]const u8,
 ) LaunchError!@This() {
-    const fork = linux.fork;
-    const execve = linux.execve;
-    const traceme = linux.ptrace_traceme;
+    const fork = zignux.fork;
+    const execve = zignux.execve;
+    const traceme = zignux.ptraceFuncs.traceme;
 
-    const pipes: linux.PipeResult = try linux.pipe();
+    const pipes: zignux.PipeResult = try zignux.pipe();
     const pid = try fork();
     assert(pid >= 0);
 
     if (pid == 0) {
-        try linux.close(pipes.reader);
+        try zignux.close(pipes.reader);
 
         try traceme();
 
@@ -79,7 +79,7 @@ pub fn launch(
         };
     }
 
-    try linux.close(pipes.writer);
+    try zignux.close(pipes.writer);
 
     const wait_result = try waitpid(pid, 0);
     assert(pid == wait_result.pid);
@@ -99,7 +99,7 @@ test launch {
 }
 
 pub fn cont(self: *@This()) !bool {
-    const p_cont = linux.ptrace_continue;
+    const p_cont = zignux.ptraceFuncs.cont;
     p_cont(self.pid) catch |err| switch (err) {
         LinuxError.SRCH => {
             log.info("Process has exited, failed to continue", .{});
@@ -146,7 +146,7 @@ pub fn wait(self: *@This()) !State {
 pub fn stop(_: *@This()) !void {}
 
 pub fn rawDeinit(self: *@This()) !void {
-    const dettach = linux.ptrace_dettach;
+    const dettach = zignux.ptraceFuncs.dettach;
 
     const pid = self.pid;
     assert(pid != 0);

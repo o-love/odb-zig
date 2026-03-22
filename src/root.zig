@@ -72,9 +72,9 @@ pub fn RunDebugger(gpa: Allocator, opts: Options) !void {
 }
 
 test {
-    _ = @import("linux.zig");
     _ = @import("log.zig");
     _ = @import("Process.zig");
     _ = @import("cli.zig");
     _ = @import("cmd.zig");
+    _ = @import("cUtils.zig");
 }
